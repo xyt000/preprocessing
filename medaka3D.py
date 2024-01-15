@@ -1,3 +1,5 @@
+import os
+
 import SimpleITK as sitk
 import cv2
 import numpy as np
@@ -27,9 +29,10 @@ if __name__ == '__main__':
     # affine transform
     rxs = []
     rys = []
-    rzs = range(0, 360, 90)
+    rzs = range(0, 360, 5)
     pad_size = -1
-    save_data = False
+    save_data = True
+    save_folder = '/home/ws/ml0077/work/data/medaka/augmentation/data3'
     for rz in rzs:
         rotation_degrees = [0, 0, rz]
         translations = [0, 0, 0]
@@ -41,9 +44,9 @@ if __name__ == '__main__':
         pos_rotation.SetTranslation(translations)
 
         # data
-        img_path = '/home/ws/ml0077/work/rl-medical/src/data/landmarks_test3/landmarks_test/test_reference_1263_94-1_scale2_crop.tif'#example_landmarks_803_4-2_scale2_crop.tif'#
-        # '/home/ws/ml0077/work/rl-medical/src/data/images/ADNI_002_S_0816_MR_MPR__GradWarp__B1_Correction__N3__Scaled_Br_20070217005829488_S18402_I40731_Normalized_to_002_S_0295.nii.gz'
-        landmark_path = '/home/ws/ml0077/work/rl-medical/src/data/landmarks_test3/landmarks_test/test_5_landmarks.xlsx'  # '/home/ws/ml0077/work/rl-medical/src/data/landmarks/ADNI_002_S_0816_MR_MPR__GradWarp__B1_Correction__N3__Scaled_Br_20070217005829488_S18402_I40731.txt'
+        vol_name = 'example_landmarks_803_4-2_scale2_crop' # 'test_reference_1263_94-1_scale2_crop' #
+        img_path = f'/home/ws/ml0077/work/data/medaka/{vol_name}.tif'
+        landmark_path = f'/home/ws/ml0077/work/data/medaka/{vol_name}.xlsx'
         landmark_names = ['mandible dentry', 'hyoid fusion', 'first vertebra', 'optic nerve head R',
                           'optic nerve head L']
         sitk_image = sitk.ReadImage(img_path, sitk.sitkFloat32)
@@ -82,7 +85,7 @@ if __name__ == '__main__':
             tx, ty, tz = translations
             result_image = sitk.GetImageFromArray(image_rotated.transpose(2, 1, 0))
             #result_image .CopyInformation(sitk_image)
-            sitk.WriteImage(result_image, f'data3/rx{rx}_ry{ry}_rz{rz}_tx{tx}_ty{ty}_tz{tz}.tif')
+            sitk.WriteImage(result_image, os.path.join(save_folder, f'rx{rx}_ry{ry}_rz{rz}_tx{tx}_ty{ty}_tz{tz}.tif'))
         # set the rotate center to the middle of the image
 
         center = [(image_dims[0] - 1) / 2, (image_dims[1] - 1) / 2 - 1, (image_dims[2] - 1) / 2]
@@ -101,19 +104,19 @@ if __name__ == '__main__':
 
             # visualization
             #
-            sl = image_data[:,  round(lm[1]), :].astype(np.uint8)
+            sl = image_data[:, :, round(lm[2])].astype(np.uint8)
             sl_color = cv2.cvtColor(sl, cv2.COLOR_GRAY2RGB)
-            cv2.circle(sl_color, (round(lm[2]), round(lm[0])), 2, (0, 255, 0))
+            cv2.circle(sl_color, (round(lm[1]), round(lm[0])), 2, (0, 255, 0))
 
-            sl_rotated = image_rotated[:, round(lm_rotated[1]), :].astype(np.uint8)
+            sl_rotated = image_rotated[:, :, round(lm_rotated[2])].astype(np.uint8)
             sl_rotated_color = cv2.cvtColor(sl_rotated, cv2.COLOR_GRAY2RGB)
-            cv2.circle(sl_rotated_color, (round(lm_rotated[2]), round(lm_rotated[0])), 2, (0, 255, 0))
+            cv2.circle(sl_rotated_color, (round(lm_rotated[1]), round(lm_rotated[0])), 2, (0, 255, 0))
 
             cv2.imshow(f'{lm_name}', sl_color)
             cv2.imwrite(f'{lm_name}.png', sl_color)
             cv2.imshow(f'rotated {rz}', sl_rotated_color)
-            cv2.waitKey(0)
+            cv2.waitKey(1)
             cv2.destroyAllWindows()
-            all_landmarks_rotated.update({lm_name: lm_rotated})
+            all_landmarks_rotated.update({lm_name: (lm_rotated[0], lm_rotated[1], lm_rotated[2])})
         if save_data:
-            pd.DataFrame(all_landmarks_rotated).to_csv(f'data3/rx{rx}_ry{ry}_rz{rz}_tx{tx}_ty{ty}_tz{tz}.csv')
+            pd.DataFrame(all_landmarks_rotated).to_csv(os.path.join(save_folder, f'rx{rx}_ry{ry}_rz{rz}_tx{tx}_ty{ty}_tz{tz}.csv'))
