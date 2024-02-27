@@ -1,19 +1,16 @@
 import torch
 
-def rotate_image(image, angle):
+def rotate_image(image, angle_rad):
     """
     Rotate a 2D image tensor with bilinear interpolation.
 
     Args:
     - image (torch.Tensor): Input 2D image tensor of shape (height, width)
-    - angle (float): Rotation angle in degrees
+    - angle (float): Rotation angle in radians
 
     Returns:
     - rotated_image (torch.Tensor): Rotated 2D image tensor
     """
-
-    # Convert angle to radians
-    angle_rad = angle * (3.14159 / 180)
 
     # Get image size
     height, width = image.shape
@@ -27,8 +24,8 @@ def rotate_image(image, angle):
                                     [torch.sin(angle_rad), torch.cos(angle_rad)]])
 
     # Calculate coordinates after rotation
-    new_coords_x = torch.arange(width) - center_x
-    new_coords_y = torch.arange(height) - center_y
+    new_coords_x = torch.tensor((0, width-1)) - center_x
+    new_coords_y = torch.tensor((0, height-1)) - center_y
     new_coords_x, new_coords_y = torch.meshgrid(new_coords_x, new_coords_y)
     new_coords = torch.stack([new_coords_x.flatten(), new_coords_y.flatten()], dim=0)
     rotated_coords = torch.mm(rotation_matrix, new_coords).round()
@@ -76,7 +73,7 @@ import numpy as np
 image = torch.tensor([[0, 1, 2, 3], [4, 5, 6, 7]])  # Example 2D image tensor
 
 print(image.shape)
-angle = torch.tensor(90)  # Rotation angle in radians (90 degrees)
+angle = torch.tensor(np.pi/2)  # Rotation angle in radians (90 degrees)
 
 rotated_image = rotate_image(image, angle)
 print(rotated_image)
@@ -90,7 +87,7 @@ image = Image.open(image_path)
 image_tensor = transforms.ToTensor()(image)
 
 # Rotate the image by 90 degrees
-rotated_image_tensor = rotate_image(image_tensor[0], torch.tensor(90))
+rotated_image_tensor = rotate_image(image_tensor[0], torch.tensor(np.pi/2))
 
 # Convert rotated image tensor to PIL image
 rotated_image_pil = transforms.ToPILImage()(rotated_image_tensor)
