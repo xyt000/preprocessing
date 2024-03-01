@@ -2,7 +2,34 @@ import torch
 import torch.nn.functional as F
 
 
-def affine_3d(image, angles, translations, mode='trilinear'):
+def crop_3d_image(image, crop_size):
+    """
+    Crop a 3D image tensor with center unchanged.
+
+    Args:
+        image (torch.Tensor): Input 3D image tensor of shape (depth, height, width).
+        crop_size (tuple): Size of the crop in each dimension (depth, height, width).
+
+    Returns:
+        torch.Tensor: Cropped image tensor.
+    """
+    depth, height, width = image.shape
+    crop_depth, crop_height, crop_width = crop_size
+
+    start_depth = (depth - crop_depth) // 2
+    start_height = (height - crop_height) // 2
+    start_width = (width - crop_width) // 2
+
+    end_depth = start_depth + crop_depth
+    end_height = start_height + crop_height
+    end_width = start_width + crop_width
+
+    cropped_image = image[start_depth:end_depth, start_height:end_height, start_width:end_width]
+
+    return cropped_image
+
+
+def affine_3d(image, angles, translations, mode='trilinear', keep_original_size=False):
     """
     Rotate a 3D volumetric image tensor without scaling effects.
 
@@ -11,6 +38,7 @@ def affine_3d(image, angles, translations, mode='trilinear'):
     - angles (torch.Tensor, float): Rotation angles around the x, y, z -axis in radians, shape (3,), anti-clockwise
     - translations (torch.Tensor, float): translation distances along the x, y, z -axis in pixels, shape (3,)
     - mode (str): 'trilinear' or 'nearest'
+    - keep_original_size (bool): if the transformed image has the original image size
 
     Returns:
     - rotated_image (torch.Tensor, float): Rotated 3D volumetric image tensor
@@ -51,9 +79,8 @@ def affine_3d(image, angles, translations, mode='trilinear'):
     new_coords_x, new_coords_y, new_coords_z = torch.meshgrid(new_coords_x, new_coords_y, new_coords_z)
     new_coords = torch.stack([new_coords_x.flatten(), new_coords_y.flatten(), new_coords_z.flatten()], dim=0)
 
-    rotated_coords = torch.mm(rotation_matrix_x, new_coords)
-    rotated_coords = torch.mm(rotation_matrix_y, rotated_coords)
-    rotated_coords = torch.mm(rotation_matrix_z, rotated_coords)
+    rotation_matrix = torch.mm(rotation_matrix_z, torch.mm(rotation_matrix_y, rotation_matrix_x))
+    rotated_coords = torch.mm(rotation_matrix, new_coords)
 
     # Calculate new image size
     new_width = int(rotated_coords[0].max() - rotated_coords[0].min() + 1)
@@ -62,7 +89,7 @@ def affine_3d(image, angles, translations, mode='trilinear'):
 
     # scale translations: in F.affine_grid and F.grid_sample the coordinates are scaled to [-1, 1]
     unit_step = torch.tensor([2. / (itm - 1) for itm in [width, height, depth]], device=translations.device)
-    translations = translations * unit_step
+    translations = translations * unit_step * -1
 
     # affine matrix
     rotation_matrix = torch.mm(rotation_matrix_z, torch.mm(rotation_matrix_y, rotation_matrix_x))
@@ -79,11 +106,13 @@ def affine_3d(image, angles, translations, mode='trilinear'):
 
     # Perform grid sample using trilinear interpolation
     mode = 'bilinear' if mode == 'trilinear' else mode
-    rotated_image = F.grid_sample(image.unsqueeze(0).unsqueeze(0), grid, align_corners=True, mode=mode)
-    return rotated_image.squeeze()
+    rotated_image = F.grid_sample(image.unsqueeze(0).unsqueeze(0), grid, align_corners=True, mode=mode).squeeze()
+    if keep_original_size:
+        rotated_image = crop_3d_image(rotated_image, (depth, height, width))
+    return rotated_image
 
 
-def affine_3d_idx(image_size, angles, translations, indexes):
+def affine_3d_idx(image_size, angles, translations, indexes, keep_original_size=False):
     """
     Calculate the corresponding indexes in the rotated image from indexes in the original image.
 
@@ -92,6 +121,7 @@ def affine_3d_idx(image_size, angles, translations, indexes):
     - angles (torch.Tensor): Rotation angles around the x, y, z-axis in radians, shape (3,), anti-clockwise
     - translations (torch.Tensor): Translation distances along the x, y, z-axis in pixels, shape (3,)
     - indexes (torch.Tensor): Indexes (width, height, depth) in the original image, shape (N, 3)
+    - keep_original_size (bool): if the transformed image has the original image size
 
     Returns:
     - rotated_indexes (torch.Tensor): Corresponding indexes (width, height, depth) in the rotated image, shape (N, 3)
@@ -135,14 +165,20 @@ def affine_3d_idx(image_size, angles, translations, indexes):
     # Calculate rotation matrix
     rotation_matrix = torch.mm(rotation_matrix_z, torch.mm(rotation_matrix_y, rotation_matrix_x))
     rotated_coords = torch.mm(rotation_matrix, new_coords)
+    # Calculate new image size
+    new_width = int(rotated_coords[0].max() - rotated_coords[0].min() + 1)
+    new_height = int(rotated_coords[1].max() - rotated_coords[1].min() + 1)
+    new_depth = int(rotated_coords[2].max() - rotated_coords[2].min() + 1)
 
     # Apply translation and rotation to indexes
-    indexes = indexes - torch.tensor([center_x, center_y, center_z]) + translations * -1
+    indexes = indexes - torch.tensor([center_x, center_y, center_z]) + translations
     rotated_indexes = torch.mm(rotation_matrix, indexes.float().T)
 
     # Calculate the minimum coordinates after rotation
     min_coords = torch.tensor([rotated_coords[0].min(), rotated_coords[1].min(), rotated_coords[2].min()])
     rotated_indexes = rotated_indexes.T - min_coords
+    if keep_original_size:
+        rotated_indexes -= torch.tensor([new_width, new_height, new_depth]) / 2 - torch.tensor([width, height, depth]) / 2
 
     return rotated_indexes.round()
 
