@@ -3,8 +3,8 @@ import time
 import numpy as np
 import torch
 
-from affine_3d_cuda.affine_3d import affine_position_3d, affine_image_3d_cuda
-from affine_3d_cuda.visualizer import vis
+from preprocessing.affine_3d_cuda.affine_3d import affine_position_3d, affine_image_3d_cuda
+from preprocessing.affine_3d_cuda.visualizer import vis
 
 
 def main():
