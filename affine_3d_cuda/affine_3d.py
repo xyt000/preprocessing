@@ -1,5 +1,6 @@
-import rotate_image_cpp
 import torch
+
+from . import rotate_image_cpp
 
 
 def compute_rotation_matrix(angles):
