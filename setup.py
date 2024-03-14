@@ -4,7 +4,7 @@ setup(
     name='preprocessing',
     version='0.0.1',
     packages=find_packages(),
-    package_data={'preprocessing': ['affine_3d_cuda/*.so']},
+    package_data={'preprocessing.affine_3d_cuda': ['rotate_image_cpp.so']},
     install_requires=[
         # list your dependencies here
     ],
