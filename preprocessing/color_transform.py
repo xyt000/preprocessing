@@ -17,10 +17,10 @@ def brightness_transform_inplace(image: torch.Tensor, brightness_factor: float) 
 
     """
     assert isinstance(image, torch.Tensor) and image.dtype == torch.float32, "Input 'image' must be a float tensor"
-    return image.mul_(brightness_factor).clamp_(0, 255)
+    image.mul_(brightness_factor).clamp_(0, 255)
 
 
-def contrast_transform(image: torch.Tensor, contrast_factor: float, image_mean=None) -> torch.Tensor:
+def contrast_transform_inplace(image: torch.Tensor, contrast_factor: float, image_mean=None) -> torch.Tensor:
     """
     Apply contrast transformation to a float torch tensor representing an image.
 
@@ -41,5 +41,5 @@ def contrast_transform(image: torch.Tensor, contrast_factor: float, image_mean=N
     if image_mean is None:
         image_mean = torch.mean(image)
 
-    augmented_image = (image - image_mean).mul_(contrast_factor) + image_mean
-    return augmented_image.clamp_(0, 255)
+    # Apply contrast transformation in place
+    image.sub_(image_mean).mul_(contrast_factor).add_(image_mean).clamp_(0, 255)
