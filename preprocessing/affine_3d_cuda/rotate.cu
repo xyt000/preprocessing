@@ -1,9 +1,10 @@
 #include <cuda_runtime.h>
 #include <stdio.h>
 #include <stdint.h>
-#include "enums.h"
+#include "rotate.h"
 
-__device__ float trilinear_interpolation(const u_char *input, int width, int height, int depth,
+template <typename scalar_t>
+__device__ scalar_t trilinear_interpolation(const scalar_t *input, int width, int height, int depth,
                                          float x, float y, float z) {
     int x0 = floor(x);
     int y0 = floor(y);
@@ -24,13 +25,14 @@ __device__ float trilinear_interpolation(const u_char *input, int width, int hei
         float c0 = c00 * (1 - yd) + c01 * yd;
         float c1 = c10 * (1 - yd) + c11 * yd;
         // interpolation along z
-        return static_cast<u_char>(c0 * (1 - zd) + c1 * zd);
+        return static_cast<scalar_t>(c0 * (1 - zd) + c1 * zd);
     }else{
         return 0;
     }
 }
 
-__global__ void rotate_image_kernel(const u_char *input, u_char *output,
+template <typename scalar_t>
+__global__ void rotate_image_kernel(const scalar_t *input, scalar_t *output,
                          int width, int height, int depth,
                          int new_width, int new_height, int new_depth,
                          float new_min_x, float new_min_y, float new_min_z,
@@ -103,7 +105,8 @@ __global__ void rotate_image_kernel(const u_char *input, u_char *output,
     } while(0)
 
 
-void launch_rotate_image_kernel(const u_char *input, u_char *output,
+template <typename scalar_t>
+void launch_rotate_image_kernel(const scalar_t *input, scalar_t *output,
                                 int width, int height, int depth, int new_width, int new_height, int new_depth,
                                 float new_min_x, float new_min_y, float new_min_z,
                                 float angle_x, float angle_y, float angle_z,
@@ -121,5 +124,15 @@ void launch_rotate_image_kernel(const u_char *input, u_char *output,
 
     // Synchronize to wait for kernel to finish
     CUDA_CHECK(cudaDeviceSynchronize());
-
 }
+
+
+// Explicitly instantiate the template function
+template void launch_rotate_image_kernel<float>(const float *, float *,
+                                                int, int, int, int, int, int,
+                                                float, float, float, float, float, float,
+                                                InterpolationMethod);
+template void launch_rotate_image_kernel<u_char>(const u_char *, u_char *,
+                                                int, int, int, int, int, int,
+                                                float, float, float, float, float, float,
+                                                InterpolationMethod);
