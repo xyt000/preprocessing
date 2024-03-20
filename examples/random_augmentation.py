@@ -20,14 +20,14 @@ def main():
     torch.cuda.empty_cache()
 
     for i in range(10):
-        # rotate image
+        # augment image and landmarks
         t0 = time.time()
-        p = torch.tensor([[231., 265, 600]])
+        p = torch.tensor([[231., 265, 600]])  # landmarks (x-y-z)
         image_, p_ = random_augmentation_image_landmarks(image, p, seed=42)
         print(f'consumed {time.time() - t0}')
 
     # visualization
-    vis(image.cpu().numpy(), image_.cpu().numpy(), p, p_)
+    vis(image_data, image_.cpu().numpy(), p, p_)
 
 
 if __name__ == "__main__":
