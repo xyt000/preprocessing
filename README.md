@@ -1,8 +1,9 @@
 ## Preprocessing, Transformation, and Augmentation of 3D images with landmarks for Machine Learning
 
-### Dependencies Installation
+### Dependencies
+PyTorch is necessary. For more details, please refer to `conda.yml`.
 
-To set up the necessary dependencies, create a Conda environment using the provided `conda.yml` file:
+To create a new Conda environment with the necessary dependencies, using the provided `conda.yml` file:
 
 ```conda env create --name preprocessing --file conda.yml```
 
@@ -12,7 +13,7 @@ Install the `preprocessing` package using the following command:
 
 ```pip install git+https://github.com/xyt000/preprocessing.git@v0.0.2```
 
-### Augmentation: Using `random_augmentation_image_landmarks` in `preprocessing.augmentation` for random augmentation of a 3D image and its associated landmarks. 
+### Augmentation: Using `random_augmentation_image_landmarks` in `preprocessing.augmentation` for Random Augmentation of a 3D Image with Associated Landmarks. 
 Refer to the provided example script examples/random_augmentation.py
 ### Recommended: Using `preprocessing.affine_3d_cuda.affine_3d` for Image Affine Transformations
 
