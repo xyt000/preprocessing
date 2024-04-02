@@ -2,6 +2,14 @@
 
 ### Dependencies
 PyTorch is necessary. For more details, please refer to `conda.yml`.
+The `rotate_image_cpp.so` has been built on a system with a version of GLIBC (GLIBC_2.32). If it's not compatible with 
+the version of GLIBC installed on your system, try to delete `rotate_image_cpp.so` and recompile it on your system by 
+running compile_extensions_JIT.py (Please change the python path and conda home path).
+
+After rebuilding the `rotate_image_cpp.so`, please install the package from your local folder by:
+```pip install -e .``` (editable mode)
+or
+```pip install .```
 
 To create a new Conda environment with the necessary dependencies, using the provided `conda.yml` file:
 
