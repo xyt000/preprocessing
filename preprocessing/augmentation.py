@@ -7,49 +7,97 @@ from preprocessing.affine_3d_cuda.affine_3d import affine_position_3d, affine_im
 from preprocessing.color_transform import contrast_transform_inplace, brightness_transform_inplace
 
 
-def random_augmentation_image_landmarks(img, landmarks, img_mean=None, contrast_range=(0.9, 1.1),
-                                        brightness_range=(0.95, 1.05), rotation_range=(-5., 5.),
-                                        translation_range=(-50., 50.), seed=None, interpolation_mode='nearest',
-                                        keep_original_size=True):
-    """
-    Apply random augmentation to an image and its associated landmarks.
+class RandomAugmentation:
+    def __init__(self, seed=None):
+        """
+        Initializes the RandomAugmentation class with an optional seed for reproducibility.
 
-    This function performs a series of random transformations on the input image and its landmarks.
-    The transformations include contrast adjustment, brightness adjustment, rotation, and translation.
+        Parameters:
+        - seed (int, optional): Seed for the random number generator to ensure reproducible results. If None,
+                                the random number generator is initialized without a fixed seed. Defaults to None.
+        """
+        self.rng = random.Random() if seed is None else random.Random(seed)
 
-    Args:
-        img (torch.Tensor, float): Input image tensor.
-        landmarks (torch.Tensor, float, Nx3): Landmarks associated with the image.
-        img_mean (float, optional): Mean value of the image. If None, it will be calculated from the image.
-        contrast_range (tuple, optional): Range for contrast adjustment, default is (0.9, 1.1).
-        brightness_range (tuple, optional): Range for brightness adjustment, default is (0.95, 1.05).
-        rotation_range (tuple, optional): Range for rotation in degrees, default is (-5., 5.).
-        translation_range (tuple, optional): Range for translation in pixels, default is (-50., 50.).
-        seed (int, optional): Seed for random number generator.
-        interpolation_mode (str, optional): Interpolation mode for affine transformation, default is 'nearest'.
-        keep_original_size (bool, optional): Whether to keep the original size after transformation, default is True.
+    def random_augmentation_image_landmarks(self, img, landmarks, img_mean=None, contrast_range=(0.9, 1.1),
+                                            brightness_range=(0.95, 1.05), rotation_range=(-5., 5.),
+                                            translation_range=(-50., 50.), interpolation_mode='nearest',
+                                            keep_original_size=True):
+        """
+        Applies random augmentations to an image and its corresponding landmarks. The augmentations include
+        adjustments to the image's contrast and brightness, as well as random 3D affine transformations
+        (rotation and translation) applied to both the image and landmarks.
 
-    Returns:
-        tuple: Tuple containing transformed image tensor and transformed landmarks tensor.
+        Parameters:
+        - img (torch.Tensor): The input image tensor with dtype=float.
+        - landmarks (torch.Tensor): A tensor containing the 3D landmarks associated with the image, with shape (N, 3).
+        - img_mean (float, optional): The mean intensity value of the image used for contrast adjustment.
+                                      If None, the mean will be computed. Defaults to None.
+        - contrast_range (tuple, optional): A tuple specifying the min and max factors for random contrast adjustment.
+                                            Defaults to (0.9, 1.1).
+        - brightness_range (tuple, optional): A tuple specifying the min and max factors for random brightness adjustment.
+                                              Defaults to (0.95, 1.05).
+        - rotation_range (tuple, optional): A tuple specifying the min and max rotation angles in degrees for random
+                                            rotation around each axis. Defaults to (-5., 5.).
+        - translation_range (tuple, optional): A tuple specifying the min and max translation values in pixels for random
+                                               translation along each axis. Defaults to (-50., 50.).
+        - interpolation_mode (str, optional): The interpolation mode to use for the affine transformation of the image.
+                                              Defaults to 'nearest'.
+        - keep_original_size (bool, optional): If True, the output image and landmarks will maintain the original size.
+                                               Defaults to True.
 
-    """
-    rng = random.Random() if seed is None else random.Random(seed)
+        Returns:
+        - torch.Tensor: The augmented image tensor.
+        - torch.Tensor: The transformed landmarks tensor with the same shape as the input landmarks.
+        """
+        # Contrast adjustment
+        factor = self.rng.uniform(*contrast_range)
+        contrast_transform_inplace(img, factor, img_mean)
 
-    # Contrast adjustment
-    factor = rng.uniform(*contrast_range)
-    contrast_transform_inplace(img, factor, img_mean)
+        # Brightness adjustment
+        factor = self.rng.uniform(*brightness_range)
+        brightness_transform_inplace(img, factor)
 
-    # Brightness adjustment
-    factor = rng.uniform(*brightness_range)
-    brightness_transform_inplace(img, factor)
+        # Random affine transformations
+        angle_x, angle_y, angle_z = self.rng.uniform(*rotation_range), self.rng.uniform(
+            *rotation_range), self.rng.uniform(*rotation_range)
+        rotation = torch.tensor([np.radians(angle_x), np.radians(angle_y), np.radians(angle_z)]).float()
+        tx, ty, tz = self.rng.uniform(*translation_range), self.rng.uniform(
+            *translation_range), self.rng.uniform(*translation_range)
+        img = affine_image_3d_cuda(img, rotation, torch.tensor([tx, ty, tz]), interpolation_mode, keep_original_size)
 
-    # Random affine
-    angle_x, angle_y, angle_z = rng.uniform(*rotation_range), rng.uniform(*rotation_range), rng.uniform(*rotation_range)
-    rotation = torch.tensor([np.radians(angle_x), np.radians(angle_y), np.radians(angle_z)]).float()
-    tx, ty, tz = rng.uniform(*translation_range), rng.uniform(*translation_range), rng.uniform(*translation_range)
-    img = affine_image_3d_cuda(img, rotation, torch.tensor([tx, ty, tz]), interpolation_mode, keep_original_size)
+        # Adjust landmarks according to the affine transformation
+        landmarks = affine_position_3d(img.shape, rotation, torch.tensor([tx, ty, tz]),
+                                       landmarks, keep_original_size)
+        return img, landmarks
 
-    # Adjust landmarks
-    landmarks = affine_position_3d(img.shape, rotation, torch.tensor([tx, ty, tz]),
-                                   landmarks, keep_original_size)
-    return img, landmarks
+    def random_rotate_image(self, img, rotation_range_x=(-5., 5.), rotation_range_y=(-5., 5.),
+                            rotation_range_z=(-5., 5.), interpolation_mode='nearest', keep_original_size=True):
+        """
+        Applies a random 3D rotation to the input image around the X, Y, and Z axes within specified ranges.
+        The operation is performed on the GPU, and the method allows specification of the interpolation mode
+        and whether to preserve the original image size.
+
+        Parameters:
+        - img (torch.Tensor): The input image tensor with shape corresponding to (D, H, W), representing depth, height, and width.
+        - rotation_range_x (tuple, optional): The range of angles in degrees for random rotation around the X-axis. Defaults to (-5., 5.).
+        - rotation_range_y (tuple, optional): The range of angles in degrees for random rotation around the Y-axis. Defaults to (-5., 5.).
+        - rotation_range_z (tuple, optional): The range of angles in degrees for random rotation around the Z-axis. Defaults to (-5., 5.).
+        - interpolation_mode (str, optional): The interpolation mode for resizing the rotated image, either 'nearest' or 'trilinear'.
+                                               Defaults to 'nearest'.
+        - keep_original_size (bool, optional): If True, the output image will be cropped or padded to retain the original dimensions.
+                                               Defaults to True.
+
+        Returns:
+        - torch.Tensor: The rotated image tensor. The dimensions match the input image if 'keep_original_size' is True;
+                        otherwise, they may vary based on the rotation.
+        - torch.Tensor: The tensor containing the rotation angles applied to the X, Y, and Z axes, in radians.
+        """
+        # Random rotation angles
+        angle_x, angle_y, angle_z = self.rng.uniform(*rotation_range_x), self.rng.uniform(
+            *rotation_range_y), self.rng.uniform(*rotation_range_z)
+        rotation = torch.tensor([np.radians(angle_x), np.radians(angle_y), np.radians(angle_z)]).float()
+
+        # Apply 3D rotation
+        img = affine_image_3d_cuda(img, rotation, interpolation_mode=interpolation_mode,
+                                   keep_original_size=keep_original_size)
+        return img, rotation
