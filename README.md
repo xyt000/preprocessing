@@ -19,7 +19,7 @@ To create a new Conda environment with the necessary dependencies, using the pro
 
 Install the `preprocessing` package using the following command:
 
-```pip install git+https://github.com/xyt000/preprocessing.git@v0.0.2```
+```pip install git+https://github.com/xyt000/preprocessing.git@v0.0.3```
 
 ### Augmentation: Using `random_augmentation_image_landmarks` in `preprocessing.augmentation` for Random Augmentation of a 3D Image with Associated Landmarks. 
 Refer to the provided example script examples/random_augmentation.py
