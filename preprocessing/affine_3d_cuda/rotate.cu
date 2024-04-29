@@ -37,7 +37,7 @@ __global__ void rotate_image_kernel(const scalar_t *input, scalar_t *output,
                          int new_width, int new_height, int new_depth,
                          float new_min_x, float new_min_y, float new_min_z,
                          float angle_x, float angle_y, float angle_z,
-                         InterpolationMethod interpolation) {
+                         InterpolationMethod interpolation, bool forward_rotation) {
 
     int x = blockIdx.x * blockDim.x + threadIdx.x;
     int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -49,25 +49,44 @@ __global__ void rotate_image_kernel(const scalar_t *input, scalar_t *output,
 
     if (x < new_width && y < new_height && z < new_depth) {// coordinates on output P
     // Find the coordinates on the input P_0
-    // P = RzRyRxP0  ---> P0 = inv(Rx)inv(Ry)inv(Rz)P
     float dx = x + new_min_x;
     float dy = y + new_min_y;
     float dz = z + new_min_z;
+    float x_orig, y_orig, z_orig; // Declare variables here
+    if (forward_rotation){
+         // P = RzRyRxP0  ---> P0 = inv(Rx)inv(Ry)inv(Rz)P
+        // Apply inv(Rz)
+        x_orig = dx * cosf(angle_z) + dy * sinf(angle_z);
+        y_orig = -dx * sinf(angle_z) + dy * cosf(angle_z);
+        z_orig = dz;
 
-    // Apply inv(Rz)
-    float x_orig = dx * cosf(angle_z) + dy * sinf(angle_z);
-    float y_orig = -dx * sinf(angle_z) + dy * cosf(angle_z);
-    float z_orig = dz;
+        // Apply inv(Ry)
+        float tmp_z = z_orig * cosf(angle_y) + x_orig * sinf(angle_y);
+        x_orig = -z_orig * sinf(angle_y) + x_orig * cosf(angle_y);
+        z_orig = tmp_z;
 
-    // Apply inv(Ry)
-    float tmp_z = z_orig * cosf(angle_y) + x_orig * sinf(angle_y);
-    x_orig = -z_orig * sinf(angle_y) + x_orig * cosf(angle_y);
-    z_orig = tmp_z;
+        // Apply inv(Rx)
+        float tmp_y = y_orig * cosf(angle_x) + z_orig * sinf(angle_x);
+        z_orig = -y_orig * sinf(angle_x) + z_orig * cosf(angle_x);
+        y_orig = tmp_y;
+    } else{
+        // P = RxRyRzP0  ---> P0 = inv(Rz)inv(Ry)inv(Rx)P
+        // Apply inv(Rx)
+        y_orig = dy * cosf(angle_x) + dz * sinf(angle_x);
+        z_orig = -dy * sinf(angle_x) + dz * cosf(angle_x);
+        x_orig = dx;
 
-    // Apply inv(Rx)
-    float tmp_y = y_orig * cosf(angle_x) + z_orig * sinf(angle_x);
-    z_orig = -y_orig * sinf(angle_x) + z_orig * cosf(angle_x);
-    y_orig = tmp_y;
+        // Apply inv(Ry)
+        float tmp_z = z_orig * cosf(angle_y) + x_orig * sinf(angle_y);
+        x_orig = -z_orig * sinf(angle_y) + x_orig * cosf(angle_y);
+        z_orig = tmp_z;
+
+
+         // Apply inv(Rz)
+        float tmp_x = x_orig * cosf(angle_z) + y_orig * sinf(angle_z);
+        y_orig = -x_orig * sinf(angle_z) + y_orig * cosf(angle_z);
+        x_orig = tmp_x;
+    }
 
     // Translate back to original coordinates
     x_orig += center_x;
@@ -94,7 +113,6 @@ __global__ void rotate_image_kernel(const scalar_t *input, scalar_t *output,
     }
 }
 
-
 #define CUDA_CHECK(call) \
     do { \
         cudaError_t error = call; \
@@ -110,7 +128,7 @@ void launch_rotate_image_kernel(const scalar_t *input, scalar_t *output,
                                 int width, int height, int depth, int new_width, int new_height, int new_depth,
                                 float new_min_x, float new_min_y, float new_min_z,
                                 float angle_x, float angle_y, float angle_z,
-                                InterpolationMethod interpolation) {
+                                InterpolationMethod interpolation, bool forward_rotation) {
     // Calculate grid dimensions based on input size
     dim3 blockDim(8, 8, 16);
     dim3 gridDim((new_width + blockDim.x - 1) / blockDim.x,
@@ -119,7 +137,7 @@ void launch_rotate_image_kernel(const scalar_t *input, scalar_t *output,
 
     rotate_image_kernel<<<gridDim, blockDim>>>(input, output, width, height, depth, new_width, new_height, new_depth,
                                                new_min_x, new_min_y, new_min_z, angle_x, angle_y, angle_z,
-                                               interpolation);
+                                               interpolation, forward_rotation);
     CUDA_CHECK(cudaGetLastError()); // Check for kernel launch errors
 
     // Synchronize to wait for kernel to finish
@@ -131,8 +149,8 @@ void launch_rotate_image_kernel(const scalar_t *input, scalar_t *output,
 template void launch_rotate_image_kernel<float>(const float *, float *,
                                                 int, int, int, int, int, int,
                                                 float, float, float, float, float, float,
-                                                InterpolationMethod);
+                                                InterpolationMethod, bool);
 template void launch_rotate_image_kernel<u_char>(const u_char *, u_char *,
                                                 int, int, int, int, int, int,
                                                 float, float, float, float, float, float,
-                                                InterpolationMethod);
+                                                InterpolationMethod, bool);

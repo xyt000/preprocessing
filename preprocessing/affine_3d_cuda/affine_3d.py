@@ -3,12 +3,13 @@ import torch
 from . import rotate_image_cpp
 
 
-def compute_rotation_matrix(angles):
+def compute_rotation_matrix(angles, forward_rotation=True):
     """
     Compute the rotation matrix R=RzRyRx based on angles.
 
     Args:
         angles (torch.Tensor, float): Angles in radians for rotation along x, y, and z axes.
+        forward_rotation (bool, optional): Whether to rotate the image with sequence of RzRyRx or RxRyRz
 
     Returns:
         torch.Tensor: Computed rotation matrix.
@@ -34,6 +35,8 @@ def compute_rotation_matrix(angles):
     ])
 
     rotation_matrix = torch.mm(rotation_matrix_z, torch.mm(rotation_matrix_y, rotation_matrix_x))
+    if not forward_rotation:
+        rotation_matrix = torch.mm(rotation_matrix_x, torch.mm(rotation_matrix_y, rotation_matrix_z))
     return rotation_matrix
 
 
@@ -51,7 +54,8 @@ def get_image_center(image_size):
     return width * 0.5, height * 0.5, depth * 0.5
 
 
-def get_new_image_info(image_size, angles, translations=torch.tensor([0., 0., 0.]), keep_original_size=False):
+def get_new_image_info(image_size, angles, translations=torch.tensor([0., 0., 0.]), keep_original_size=False,
+                       forward_rotation=True):
     """Calculates new size and position of an image after applying specified rotations and translations.
 
     Args:
@@ -59,6 +63,7 @@ def get_new_image_info(image_size, angles, translations=torch.tensor([0., 0., 0.
         angles (torch.Tensor): Tuple containing rotation angles along x, y, and z axes in radians.
         translations (torch.Tensor, optional): Translation vector along x, y, and z axes. Defaults to torch.tensor([0., 0., 0.]).
         keep_original_size (bool, optional): Whether to keep the original size of the image. Defaults to False.
+        forward_rotation (bool, optional): Whether to rotate the image with sequence of RzRyRx or RxRyRz
 
     Returns:
         tuple: A tuple containing:
@@ -69,7 +74,7 @@ def get_new_image_info(image_size, angles, translations=torch.tensor([0., 0., 0.
     center_x, center_y, center_z = get_image_center(image_size)
 
     # Rotation matrix
-    rotation_matrix = compute_rotation_matrix(angles)
+    rotation_matrix = compute_rotation_matrix(angles, forward_rotation)
 
     # Calculate coordinates of vertices after rotation
     coords_x = torch.tensor((0, width - 1)) - center_x
@@ -95,7 +100,7 @@ def get_new_image_info(image_size, angles, translations=torch.tensor([0., 0., 0.
 
 
 def affine_image_3d_cuda(image, angles=torch.tensor([0., 0., 0.]), translations=torch.tensor([0., 0., 0.]),
-                         interpolation_mode="nearest", keep_original_size=False):
+                         interpolation_mode="nearest", keep_original_size=False, forward_rotation=True):
     # Prepare orig image
     assert image.device.type == "cuda", "The input image has to be a tensor on cuda."
     if not image.is_contiguous():
@@ -103,7 +108,8 @@ def affine_image_3d_cuda(image, angles=torch.tensor([0., 0., 0.]), translations=
         torch.cuda.empty_cache()
 
     # Get the new image size (DHW) and min coordinates (xyz) after rotation (axis, center of image) and translation
-    new_size, new_min_coords = get_new_image_info(image.size(), angles, translations, keep_original_size)
+    new_size, new_min_coords = get_new_image_info(image.size(), angles, translations, keep_original_size,
+                                                  forward_rotation)
     # Container for new image
     output_tensor = torch.zeros(size=new_size, dtype=image.dtype, device=image.device)
     # Interpolation mode
@@ -114,7 +120,7 @@ def affine_image_3d_cuda(image, angles=torch.tensor([0., 0., 0.]), translations=
 
     # Call rotation function
     rotate_image_cpp.rotate_image(image, output_tensor, *new_min_coords,
-                                  *angles.numpy().tolist(), interpolation)
+                                  *angles.numpy().tolist(), interpolation, forward_rotation)
     return output_tensor
 
 
