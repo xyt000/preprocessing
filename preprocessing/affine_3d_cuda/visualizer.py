@@ -4,7 +4,11 @@ import cv2
 import numpy as np
 
 
-def vis(img, img_transformed, idx=None, idx_transformed=None):
+def vis(img, img_transformed, idx=None, idx_transformed=None, save_path=None):
+    if idx is None or idx_transformed is None:
+        idx = (i//2 for i in img.shape[::-1])
+        idx_transformed = (i//2 for i in img_transformed.shape[::-1])
+
     if torch.is_tensor(idx):
         idx = idx[0].numpy().tolist()
         idx_transformed = idx_transformed[0].numpy().tolist()
@@ -41,7 +45,7 @@ def vis(img, img_transformed, idx=None, idx_transformed=None):
     plt.axis('off')
     plt.subplot(1, 6, 2)
     plt.imshow(sl_rotated_color)  # Show a slice with lm of the rotated image
-    plt.title('transformed Image (x-y)')
+    plt.title('Transformed Image (x-y)')
     plt.axis('off')
 
     plt.subplot(1, 6, 3)
@@ -50,7 +54,7 @@ def vis(img, img_transformed, idx=None, idx_transformed=None):
     plt.axis('off')
     plt.subplot(1, 6, 4)
     plt.imshow(sl2_rotated_color)  # Show a slice with lm of the rotated image
-    plt.title('transformed Image (x-z)')
+    plt.title('Transformed Image (x-z)')
     plt.axis('off')
     plt.subplot(1, 6, 5)
     plt.imshow(sl3_color)  # Show a slice with lm of the original image
@@ -58,6 +62,10 @@ def vis(img, img_transformed, idx=None, idx_transformed=None):
     plt.axis('off')
     plt.subplot(1, 6, 6)
     plt.imshow(sl3_rotated_color)  # Show a slice with lm of the rotated image
-    plt.title('transformed Image (y-z)')
+    plt.title('Transformed Image (y-z)')
     plt.axis('off')
-    plt.show()
+    if save_path is not None:
+        plt.savefig(save_path)
+    else:
+        plt.show()
+
