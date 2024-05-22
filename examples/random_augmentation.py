@@ -1,11 +1,10 @@
 import time
 
-import numpy as np
-import torch
 import SimpleITK as sitk
+import torch
 import torch.nn.functional as F
 
-
+from preprocessing.affine_3d_cuda.affine_3d import affine_image_3d_cuda
 from preprocessing.affine_3d_cuda.visualizer import vis
 from preprocessing.augmentation import RandomAugmentation
 
@@ -33,10 +32,10 @@ def test_aug_image_with_landmarks(image_path):
     vis(image_data, image_.cpu().numpy(), p, p_)
 
 
-def test_random_rotation(image_path):
+def test_random_affine(image_path):
     ra = RandomAugmentation(seed=42)
     # read image
-    sitk_image = sitk.ReadImage(img_path, sitk.sitkUInt8)
+    sitk_image = sitk.ReadImage(image_path, sitk.sitkUInt8)
     # Convert from [depth, width, height] to [depth, height, width]
     image_data = sitk.GetArrayFromImage(sitk_image).transpose(0, 2, 1)
     image_dims = image_data.shape
@@ -51,21 +50,28 @@ def test_random_rotation(image_path):
     img = F.pad(img, [w // 2, w - w // 2, h // 2, h - h // 2, d // 2, d - d // 2])
     torch.cuda.empty_cache()
 
-    # random rotate image
-    ts = []
+    # random affine image
     for i in range(10):
         # augment image and landmarks
         tik = time.time()
-        image_, rotation = ra.random_rotate_image(img, rotation_range_x=[20., 20.], rotation_range_y=[0., 0.],
-                                                  rotation_range_z=[-0., 0.])
+        image_, rotation, t = ra.random_affine_image(img, rotation_range_x=[20., 20.], rotation_range_y=[0., 0.],
+                                                     rotation_range_z=[-0., 0.], translate_range_x=[50, 50],
+                                                     translate_range_y=[30, 30], translate_range_z=[100, 100])
         print(f'consumed {time.time() - tik}')
 
     # visualization
-    vis(image_data, image_.cpu().numpy(), None, None)
+    vis(image_data, image_.cpu().numpy(), (i // 2 for i in image_dims[::-1]),
+        [round(i / 2 + t) for i, t in zip((576, 175, 202)[::-1], t.numpy())])
+    print(f'rotation {rotation}; translation {t}.')
+
+    image_inv = affine_image_3d_cuda(image_, translations=-1 * t, keep_original_size=True)
+
+    vis(image_data, image_inv.cpu().numpy(), (i // 2 for i in image_dims[::-1]),
+        [round(i / 2) for i in (576, 175, 202)[::-1]])
 
 
 if __name__ == "__main__":
     vol_name = '417'
     img_path = f'/mnt/data/medaka_landmarks/data/{vol_name}.tif'
-    test_aug_image_with_landmarks(img_path)
-    test_random_rotation(img_path)
+    # test_aug_image_with_landmarks(img_path)
+    test_random_affine(img_path)

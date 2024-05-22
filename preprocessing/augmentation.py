@@ -70,34 +70,48 @@ class RandomAugmentation:
                                        landmarks, keep_original_size)
         return img, landmarks
 
-    def random_rotate_image(self, img, rotation_range_x=(-5., 5.), rotation_range_y=(-5., 5.),
-                            rotation_range_z=(-5., 5.), interpolation_mode='nearest', keep_original_size=True):
+    def random_affine_image(self, img, rotation_range_x=(-5., 5.), rotation_range_y=(-5., 5.),
+                            rotation_range_z=(-5., 5.), translate_range_x=(-0., 0.), translate_range_y=(-0., 0.),
+                            translate_range_z=(-0., 0.), interpolation_mode='nearest', keep_original_size=True):
         """
-        Applies a random 3D rotation to the input image around the X, Y, and Z axes within specified ranges.
-        The operation is performed on the GPU, and the method allows specification of the interpolation mode
-        and whether to preserve the original image size.
+        Applies a random affine transformation to a 3D image, including rotations and translations
+        within specified ranges for each axis.
 
-        Parameters:
-        - img (torch.Tensor): The input image tensor with shape corresponding to (D, H, W), representing depth, height, and width.
-        - rotation_range_x (tuple, optional): The range of angles in degrees for random rotation around the X-axis. Defaults to (-5., 5.).
-        - rotation_range_y (tuple, optional): The range of angles in degrees for random rotation around the Y-axis. Defaults to (-5., 5.).
-        - rotation_range_z (tuple, optional): The range of angles in degrees for random rotation around the Z-axis. Defaults to (-5., 5.).
-        - interpolation_mode (str, optional): The interpolation mode for resizing the rotated image, either 'nearest' or 'trilinear'.
-                                               Defaults to 'nearest'.
-        - keep_original_size (bool, optional): If True, the output image will be cropped or padded to retain the original dimensions.
-                                               Defaults to True.
+        Args:
+            img (torch.Tensor): The input image tensor with shape (D, H, W), representing depth, height, and width.
+            rotation_range_x (tuple, optional): The range of angles in degrees for random rotation around the X-axis.
+                Defaults to (-5., 5.).
+            rotation_range_y (tuple, optional): The range of angles in degrees for random rotation around the Y-axis.
+                Defaults to (-5., 5.).
+            rotation_range_z (tuple, optional): The range of angles in degrees for random rotation around the Z-axis.
+                Defaults to (-5., 5.).
+            translate_range_x (tuple, optional): The range of translations in the X direction.
+                Defaults to (-0., 0.).
+            translate_range_y (tuple, optional): The range of translations in the Y direction.
+                Defaults to (-0., 0.).
+            translate_range_z (tuple, optional): The range of translations in the Z direction.
+                Defaults to (-0., 0.).
+            interpolation_mode (str, optional): The interpolation mode for resizing the transformed image.
+                Can be 'nearest' or 'trilinear'. Defaults to 'nearest'.
+            keep_original_size (bool, optional): If True, the output image will be cropped or padded to retain the
+                original dimensions. Defaults to True.
 
         Returns:
-        - torch.Tensor: The rotated image tensor. The dimensions match the input image if 'keep_original_size' is True;
-                        otherwise, they may vary based on the rotation.
-        - torch.Tensor: The tensor containing the rotation angles applied to the X, Y, and Z axes, in radians.
+            torch.Tensor: The transformed image tensor. The dimensions match the input image if `keep_original_size`
+                is True; otherwise, they may vary based on the transformation.
+            torch.Tensor: The tensor containing the rotation angles applied to the X, Y, and Z axes, in radians.
+            torch.Tensor: The tensor containing the translation values applied to the X, Y, and Z axes.
         """
         # Random rotation angles
         angle_x, angle_y, angle_z = self.rng.uniform(*rotation_range_x), self.rng.uniform(
             *rotation_range_y), self.rng.uniform(*rotation_range_z)
+        tx, ty, tz = self.rng.uniform(*translate_range_x), self.rng.uniform(*translate_range_y), self.rng.uniform(
+            *translate_range_z)
         rotation = torch.tensor([np.radians(angle_x), np.radians(angle_y), np.radians(angle_z)]).float()
+        translation = torch.tensor([tx, ty, tz]).float()
 
         # Apply 3D rotation
-        img = affine_image_3d_cuda(img, rotation, interpolation_mode=interpolation_mode,
+        img = affine_image_3d_cuda(img, rotation, translation, interpolation_mode=interpolation_mode,
                                    keep_original_size=keep_original_size)
-        return img, rotation
+        return img, rotation, translation
+
